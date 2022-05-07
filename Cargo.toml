@@ -1,0 +1,17 @@
+[package]
+name = "abcrab"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "abcrab"
+crate-type = ["rlib"]
+# crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.16.3", features = ["extension-module"] }
+nom = "7"
+
+[package.metadata.maturin]
+python-source = "python"
