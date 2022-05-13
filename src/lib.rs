@@ -13,7 +13,6 @@ use nom::{
     IResult,
 };
 
-pub mod hexcolor;
 mod pyabcrab;
 
 #[derive(Debug, Clone, PartialEq)]
