@@ -1,5 +1,18 @@
 use core::fmt;
+use num::rational::Rational32;
+use std::error::Error;
 use std::fmt::{Display, Formatter};
+
+#[derive(Debug)]
+pub struct IllegalLength;
+
+impl Error for IllegalLength {}
+
+impl fmt::Display for IllegalLength {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "This is not a legal time value for a note")
+    }
+}
 
 use nom::{
     branch::alt,
@@ -42,38 +55,8 @@ pub struct Note {
     key: char,
     accidental: Option<Accidental>,
     // FIXME: length should be isomorphic with ABC length
-    length: i32, // power of 2, where 0 represents a quarter note (or note of length `L:`); constrained to be within -5 to 10
+    length: Length,
 }
-
-impl Note {
-    pub fn new(octave: i32, key: char, accidental: Option<Accidental>, length: i32) -> Note {
-        Note {
-            octave,
-            key,
-            accidental,
-            length,
-        }
-    }
-}
-
-// Example: middle C# whole note with L:1/4 is encoded as:
-// Note { 4, KeyName::C, Some(Accidental::Sharp), 2 }
-//
-// Written in ABC notation this is ^C4 (assuming L:1/4)
-
-const _DOTTED: &str = "\u{1D16D}";
-
-const NOTES: [&str; 9] = [
-    "\u{1D164}", // 1/128th note
-    "\u{1D163}",
-    "\u{1D162}",
-    "\u{1D161}",
-    "\u{1D160}",
-    "\u{1D15F}", // quarter note
-    "\u{1D15E}",
-    "\u{1D15D}", // whole note
-    "\u{1D15C}", // breve
-];
 
 impl Display for Note {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -81,13 +64,206 @@ impl Display for Note {
         if let Some(a) = &self.accidental {
             a.fmt(f)?
         };
-        write!(f, " {}", NOTES[(3 + self.length) as usize])?;
+        // write!(f, " ")?; self.length.fmt(f)?;
+        write!(f, " {}", self.length)?;
 
         if self.octave != 4 {
             write!(f, " @{}>", self.octave)
         } else {
             write!(f, ">")
         }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum NoteShape {
+    Hundred28th,
+    SixtyFourth,
+    ThirtySecond,
+    Sixteenth,
+    Eighth,
+    Quarter,
+    Half,
+    Whole,
+    Breve,
+}
+
+impl Display for NoteShape {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let s = match self {
+            Self::Hundred28th => "\u{1D164}",
+            Self::SixtyFourth => "\u{1D163}",
+            Self::ThirtySecond => "\u{1D162}",
+            Self::Sixteenth => "\u{1D161}",
+            Self::Eighth => "\u{1D160}",
+            Self::Quarter => "\u{1D15F}",
+            Self::Half => "\u{1D15E}",
+            Self::Whole => "\u{1D15D}",
+            Self::Breve => "\u{1D15C}",
+        };
+        write!(f, "{}", s)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Length {
+    note_shape: NoteShape,
+    dot: i32,
+}
+
+impl Length {
+    pub fn new(ratio: (i32, i32)) -> Result<Length, IllegalLength> {
+        // assign to a rational to simplify
+        let rr = Rational32::new(ratio.0, ratio.1);
+        let dur = match (rr.numer(), rr.denom()) {
+            (1, 128) => Length {
+                note_shape: NoteShape::Hundred28th,
+                dot: 0,
+            },
+            (1, 64) => Length {
+                note_shape: NoteShape::SixtyFourth,
+                dot: 0,
+            },
+            (3, 128) => Length {
+                note_shape: NoteShape::SixtyFourth,
+                dot: 1,
+            },
+            (1, 32) => Length {
+                note_shape: NoteShape::ThirtySecond,
+                dot: 0,
+            },
+            // 5
+            (3, 64) => Length {
+                note_shape: NoteShape::ThirtySecond,
+                dot: 1,
+            },
+            (7, 128) => Length {
+                note_shape: NoteShape::ThirtySecond,
+                dot: 2,
+            },
+            (1, 16) => Length {
+                note_shape: NoteShape::Sixteenth,
+                dot: 0,
+            },
+            // 9-11
+            (3, 32) => Length {
+                note_shape: NoteShape::Sixteenth,
+                dot: 1,
+            },
+            // 13
+            (7, 64) => Length {
+                note_shape: NoteShape::Sixteenth,
+                dot: 2,
+            },
+            (15, 128) => Length {
+                note_shape: NoteShape::Sixteenth,
+                dot: 3,
+            },
+            (1, 8) => Length {
+                note_shape: NoteShape::Eighth,
+                dot: 0,
+            },
+            // 17-23
+            (3, 16) => Length {
+                note_shape: NoteShape::Eighth,
+                dot: 1,
+            },
+            // 25-27
+            (7, 32) => Length {
+                note_shape: NoteShape::Eighth,
+                dot: 2,
+            },
+            // 29
+            (15, 64) => Length {
+                note_shape: NoteShape::Eighth,
+                dot: 3,
+            },
+            // 31
+            (1, 4) => Length {
+                note_shape: NoteShape::Quarter,
+                dot: 0,
+            },
+            // 33-47
+            (3, 8) => Length {
+                note_shape: NoteShape::Quarter,
+                dot: 1,
+            },
+            // 49-55
+            (7, 16) => Length {
+                note_shape: NoteShape::Quarter,
+                dot: 2,
+            },
+            // 57-59
+            (15, 32) => Length {
+                note_shape: NoteShape::Quarter,
+                dot: 3,
+            },
+            // 61-63
+            (1, 2) => Length {
+                note_shape: NoteShape::Half,
+                dot: 0,
+            },
+            // 65-95
+            (3, 4) => Length {
+                note_shape: NoteShape::Half,
+                dot: 1,
+            },
+            // 97-111
+            (7, 8) => Length {
+                note_shape: NoteShape::Half,
+                dot: 2,
+            },
+            // 113-119
+            (15, 16) => Length {
+                note_shape: NoteShape::Half,
+                dot: 3,
+            },
+            // 121-127
+            (1, 1) => Length {
+                note_shape: NoteShape::Whole,
+                dot: 0,
+            },
+            (3, 2) => Length {
+                note_shape: NoteShape::Whole,
+                dot: 1,
+            },
+            (7, 4) => Length {
+                note_shape: NoteShape::Whole,
+                dot: 2,
+            },
+            (15, 8) => Length {
+                note_shape: NoteShape::Whole,
+                dot: 3,
+            },
+            (2, 1) => Length {
+                note_shape: NoteShape::Breve,
+                dot: 0,
+            },
+            (3, 1) => Length {
+                note_shape: NoteShape::Breve,
+                dot: 1,
+            },
+            (7, 2) => Length {
+                note_shape: NoteShape::Breve,
+                dot: 2,
+            },
+            (15, 4) => Length {
+                note_shape: NoteShape::Breve,
+                dot: 3,
+            },
+            _ => return Err(IllegalLength {}),
+        };
+        Ok(dur)
+    }
+}
+
+impl Display for Length {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        self.note_shape.fmt(f)?;
+        for _ in 0..(self.dot) {
+            write!(f, "{}", DOT)?;
+        }
+        write!(f, "")
     }
 }
 
@@ -117,19 +293,17 @@ pub fn octave_count(input: &str) -> IResult<&str, i32> {
 pub fn pitch(input: &str) -> IResult<&str, Note> {
     let mut octave = 4;
 
-    let high = satisfy(|ch| ch >= 'A' && ch <= 'G');
-    let low = satisfy(|ch| ch >= 'a' && ch <= 'g');
+    let low = satisfy(|ch| ch >= 'A' && ch <= 'G');
+    let high = satisfy(|ch| ch >= 'a' && ch <= 'g');
 
-    let low = map(low, |ch| {
-        octave = octave - 1;
+    let high = map(high, |ch| {
+        octave = octave + 1;
         ch.to_ascii_uppercase()
     });
 
     let some_key = alt((high, low));
 
-    let note = tuple((opt(accidental), some_key, octave_count))(input)?;
-
-    let (rest, (acc, key, mod_octave)) = note;
+    let (rest, (acc, key, mod_octave)) = tuple((opt(accidental), some_key, octave_count))(input)?;
 
     Ok((
         rest,
@@ -137,13 +311,18 @@ pub fn pitch(input: &str) -> IResult<&str, Note> {
             octave: octave + mod_octave,
             key: key,
             accidental: acc,
-            length: 1,
+            length: Length {
+                note_shape: NoteShape::Eighth,
+                dot: 0,
+            },
         },
     ))
 }
 
 const _TUNE1: &'static str = "B>cd BAG";
 const _TUNE2: &'static str = "B>cd BAG|FA Ac BA|B>cd BAG|DG GB AG:|";
+
+const DOT: &str = "\u{1D16D}";
 
 #[test]
 fn parse_pitch() {
@@ -155,7 +334,10 @@ fn parse_pitch() {
                 octave: 4,
                 key: 'B',
                 accidental: None,
-                length: 1
+                length: Length {
+                    note_shape: NoteShape::Eighth,
+                    dot: 0
+                },
             }
         ))
     );
@@ -167,20 +349,26 @@ fn parse_pitch() {
                 octave: 4,
                 key: 'B',
                 accidental: Some(Accidental::Sharp2),
-                length: 1
+                length: Length {
+                    note_shape: NoteShape::Eighth,
+                    dot: 0
+                }
             }
         ))
     );
     assert_eq!(
-        // octave mark here is: 2 down + 2 up + 1 down
+        // octave mark here is: 2 down + 2 up + 1 down, and lowercase starts +1
         pitch("=b,,'',"),
         Ok((
             "",
             Note {
-                octave: 2,
+                octave: 4,
                 key: 'B',
                 accidental: Some(Accidental::Natural),
-                length: 1
+                length: Length {
+                    note_shape: NoteShape::Eighth,
+                    dot: 0
+                }
             }
         ))
     );
