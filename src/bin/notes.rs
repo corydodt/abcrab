@@ -1,6 +1,6 @@
 use std::env;
 
-use abcrab::pitch;
+use abcrab::parser::pitch;
 
 fn main() {
     let aa: Vec<String> = env::args().collect();

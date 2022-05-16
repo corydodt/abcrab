@@ -11,7 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 pyo3 = { version = "0.16.3", features = ["extension-module"] }
-nom = "7"
+nom = "7.1.1"
 num = "0.4.0"
 
 [package.metadata.maturin]
